@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: grovia-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: grovia
+      POSTGRES_PASSWORD: grovia_dev_password
+      POSTGRES_DB: grovia
+    ports:
+      - "5433:5432"
+    volumes:
+      - grovia_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grovia -d grovia"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  grovia_pgdata:

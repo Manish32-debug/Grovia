@@ -1,0 +1,13 @@
+import { Router } from 'express';
+import { Role, assignmentIdParamsSchema, deliveryFailureSchema } from '@grovia/shared';
+import * as controller from '../controllers/delivery.controller.js';
+import { authenticate } from '../middleware/authenticate.js';
+import { authorize } from '../middleware/authorize.js';
+import { validate } from '../middleware/validate.js';
+export const deliveryRouter: Router = Router();
+deliveryRouter.use(authenticate, authorize(Role.DELIVERY_PARTNER));
+deliveryRouter.get('/', controller.list);
+deliveryRouter.post('/:assignmentId/accept', validate({params:assignmentIdParamsSchema}), controller.accept);
+deliveryRouter.post('/:assignmentId/pickup', validate({params:assignmentIdParamsSchema}), controller.pickup);
+deliveryRouter.post('/:assignmentId/complete', validate({params:assignmentIdParamsSchema}), controller.complete);
+deliveryRouter.post('/:assignmentId/fail', validate({params:assignmentIdParamsSchema, body:deliveryFailureSchema}), controller.fail);

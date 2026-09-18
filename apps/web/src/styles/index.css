@@ -1,0 +1,82 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/plus-jakarta-sans';
+
+/* Mirrors packages/shared/src/design-tokens.ts — keep the two in step.
+   Tailwind v4 turns each entry here into both a CSS variable and a utility
+   class, so `bg-grove-500` and `var(--color-grove-500)` are the same value. */
+@theme {
+  --font-sans: 'Plus Jakarta Sans Variable', ui-sans-serif, system-ui, sans-serif;
+
+  --color-ink: #0b1220;
+  --color-ink-soft: #1a2432;
+  --color-canvas: #f5f6f8;
+  --color-surface: #ffffff;
+  --color-surface-sunken: #eff1f4;
+  --color-line: #e8eaee;
+  --color-grove-50: #e7f7ee;
+  --color-grove-500: #2fbf6b;
+  --color-grove-600: #27a85d;
+  --color-sand-100: #ede7da;
+  --color-text-2: #5a6474;
+  --color-text-3: #8b94a3;
+  --color-danger: #e23d3d;
+  --color-amber: #e0a415;
+
+  --radius-tile: 14px;
+  --radius-card: 20px;
+  --radius-sheet: 28px;
+
+  --shadow-card: 0 1px 2px rgb(11 18 32 / 0.04), 0 10px 28px -12px rgb(11 18 32 / 0.12);
+  --shadow-lifted: 0 2px 4px rgb(11 18 32 / 0.05), 0 18px 40px -14px rgb(11 18 32 / 0.18);
+
+  --text-display: 28px;
+  --text-display--line-height: 34px;
+  --text-display--font-weight: 800;
+  --text-display--letter-spacing: -0.02em;
+
+  --text-h2: 20px;
+  --text-h2--line-height: 26px;
+  --text-h2--font-weight: 700;
+  --text-h2--letter-spacing: -0.01em;
+
+  --text-price: 17px;
+  --text-price--line-height: 22px;
+  --text-price--font-weight: 700;
+
+  --text-caption: 13px;
+  --text-caption--line-height: 18px;
+  --text-caption--font-weight: 500;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-canvas text-ink font-sans antialiased;
+    font-size: 15px;
+    line-height: 22px;
+  }
+
+  /* Visible keyboard focus everywhere, without a focus ring on mouse clicks. */
+  :focus-visible {
+    outline: 2px solid var(--color-grove-500);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  /* Prices and quantities must not jitter as digits change. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

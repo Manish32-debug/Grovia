@@ -1,0 +1,33 @@
+{
+  "name": "grovia",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel --stream dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "format": "prettier --write \"**/*.{ts,tsx,json,css,md}\"",
+    "test": "pnpm -r test",
+    "pg:up": "docker compose up -d",
+    "pg:down": "docker compose down",
+    "pg:nuke": "docker compose down -v",
+    "db:migrate": "pnpm --filter @grovia/api db:migrate",
+    "db:migrate:create": "pnpm --filter @grovia/api db:migrate:create",
+    "db:seed": "pnpm --filter @grovia/api db:seed",
+    "db:reset": "pnpm --filter @grovia/api exec prisma migrate reset",
+    "db:studio": "pnpm --filter @grovia/api db:studio"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "eslint": "^9.17.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.1"
+  }
+}

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 500 600">
+  <rect width="500" height="600" rx="42" fill="#FFF5DF"/>
+  <circle cx="415" cy="85" r="38" fill="#9A5B13" opacity=".10"/>
+  <circle cx="70" cy="515" r="58" fill="#E9A23B" opacity=".10"/>
+  
+        <path d="M125 165 Q250 120 375 165 L355 585 Q250 625 145 585 Z" fill="#E9A23B"/>
+        <rect x="150" y="305" width="200" height="145" rx="22" fill="white"/>
+        <rect x="175" y="175" width="150" height="25" rx="10" fill="#9A5B13"/>
+        
+  <text x="250" y="355" text-anchor="middle" font-family="Arial, sans-serif" font-size="20" font-weight="700" fill="#9A5B13">Butter Croissant</text>
+  <text x="250" y="385" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" fill="#334155"></text>
+  <text x="250" y="540" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" letter-spacing="2" fill="#64748B">GROVIA • BAKERY</text>
+  <text x="250" y="565" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="#94A3B8">FRESH CHOICES. EVERYDAY.</text>
+</svg>

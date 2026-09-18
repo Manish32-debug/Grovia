@@ -1,0 +1,12 @@
+import { Router } from 'express';
+import { Role } from '@grovia/shared';
+import * as controller from '../controllers/intelligence.controller.js';
+import { authenticate } from '../middleware/authenticate.js';
+import { authorize } from '../middleware/authorize.js';
+export const intelligenceRouter:Router=Router();
+intelligenceRouter.use(authenticate);
+intelligenceRouter.get('/smart-basket',controller.smartBasket);
+intelligenceRouter.get('/recommendations',controller.recommendations);
+intelligenceRouter.get('/demand',authorize(Role.ADMIN),controller.demand);
+intelligenceRouter.post('/demand/rebuild',authorize(Role.ADMIN),controller.rebuild);
+intelligenceRouter.post('/associations/rebuild',authorize(Role.ADMIN),controller.associations);

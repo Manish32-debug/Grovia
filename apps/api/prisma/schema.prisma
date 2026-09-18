@@ -1,0 +1,718 @@
+// Grovia — PostgreSQL schema.
+//
+// Conventions enforced throughout:
+//   * Every monetary column is Int paise. No Float, no Decimal, no strings.
+//   * Snapshot columns on Order/OrderItem preserve purchase-time truth; they are
+//     never backfilled when the source product changes.
+//   * Constraints Prisma cannot express (generated tsvector, partial uniques,
+//     CHECKs, trigram indexes) live in prisma/sql/init-extras.sql and are
+//     appended to the init migration. They are part of the schema, not extras.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pg_trgm]
+  // Pooled deployments (Neon) need a non-pooled URL for migrations. Prisma 6
+  // moved that out of the schema: it is configured in prisma.config.ts when
+  // we move to a pooled database in phase 15.
+}
+
+// ─────────────────────────────── enums ───────────────────────────────
+// Values mirror packages/shared/src/enums.ts exactly.
+
+enum Role {
+  CUSTOMER
+  ADMIN
+  DELIVERY_PARTNER
+}
+
+enum EmailTokenType {
+  VERIFY
+  RESET
+}
+
+enum AddressLabel {
+  HOME
+  WORK
+  COLLEGE
+  OTHER
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAYMENT_FAILED
+  EXPIRED
+  PLACED
+  CONFIRMED
+  PACKING
+  READY_FOR_PICKUP
+  OUT_FOR_DELIVERY
+  DELIVERED
+  DELIVERY_FAILED
+  CANCELLED
+  RETURN_REQUESTED
+  RETURNED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  CREATED
+  PENDING
+  SUCCESS
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
+enum PaymentMethod {
+  UPI_QR
+  UPI_COLLECT
+  CARD
+  NETBANKING
+  COD
+}
+
+enum RefundStatus {
+  INITIATED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum DiscountType {
+  PERCENT
+  FIXED
+}
+
+enum StockReason {
+  ORDER_RESERVE
+  ORDER_COMMIT
+  ORDER_RELEASE
+  CANCEL_RESTOCK
+  ADMIN_ADJUST
+  RETURN
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum NotificationType {
+  ORDER_PLACED
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+  ORDER_CONFIRMED
+  ORDER_PACKING
+  ORDER_READY
+  ORDER_OUT_FOR_DELIVERY
+  ORDER_DELIVERED
+  ORDER_CANCELLED
+  REFUND_PROCESSED
+  PRICE_DROP
+  BACK_IN_STOCK
+}
+
+enum AssignmentStatus {
+  OFFERED
+  ACCEPTED
+  PICKED_UP
+  COMPLETED
+  DECLINED
+}
+
+// ───────────────────────────── identity ──────────────────────────────
+
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique // always stored lower-cased by the auth service
+  passwordHash    String
+  name            String
+  phone           String?
+  role            Role      @default(CUSTOMER)
+  emailVerifiedAt DateTime?
+  isActive        Boolean   @default(true)
+  /// Bumped on password reset to invalidate every live access token at once.
+  tokenVersion    Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  addresses       Address[]
+  emailTokens     EmailToken[]
+  refreshTokens   RefreshToken[]
+  cart            Cart?
+  wishlist        Wishlist?
+  orders          Order[]
+  reviews         Review[]
+  notifications   Notification[]
+  couponUsages    CouponUsage[]
+  deliveryPartner DeliveryPartner?
+  stockLedger     StockLedger[]
+  productStats    UserProductStat[]
+
+  @@index([role, isActive])
+}
+
+model EmailToken {
+  id         String         @id @default(uuid())
+  userId     String
+  tokenHash  String         @unique
+  type       EmailTokenType
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime       @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@index([expiresAt])
+}
+
+model RefreshToken {
+  id           String    @id @default(uuid())
+  userId       String
+  tokenHash    String    @unique
+  /// All descendants of one login share a family. Reuse of a revoked token
+  /// revokes the entire family — that is the theft-detection mechanism.
+  familyId     String
+  replacedById String?
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  userAgent    String?
+  ip           String?
+  createdAt    DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@index([expiresAt])
+}
+
+model Address {
+  id           String       @id @default(uuid())
+  userId       String
+  label        AddressLabel @default(HOME)
+  contactName  String
+  contactPhone String
+  line1        String
+  line2        String?
+  landmark     String?
+  city         String
+  state        String
+  pincode      String
+  isDefault    Boolean      @default(false)
+  /// Soft delete: orders reference a jsonb snapshot, but keeping the row makes
+  /// "reuse my old address" work after a user deletes it.
+  deletedAt    DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, deletedAt])
+}
+
+model DeliveryPartner {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  vehicleType   String
+  licenseNumber String?
+  isAvailable   Boolean  @default(true)
+  currentZone   String?
+  createdAt     DateTime @default(now())
+
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignments DeliveryAssignment[]
+
+  @@index([isAvailable, currentZone])
+}
+
+// ───────────────────────────── catalog ───────────────────────────────
+
+model Category {
+  id           String   @id @default(uuid())
+  name         String
+  slug         String   @unique
+  iconUrl      String?
+  /// GST rate in basis points (500 = 5%). Most staples are zero-rated.
+  gstBasis     Int      @default(0)
+  displayOrder Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  products Product[]
+
+  @@index([isActive, displayOrder])
+}
+
+model Product {
+  id              String   @id @default(uuid())
+  name            String
+  slug            String   @unique
+  brand           String?
+  description     String?
+  categoryId      String
+  /// Display unit, e.g. "500 g", "1 L", "6 pieces".
+  unit            String
+  mrpPaise        Int
+  discountPercent Int      @default(0)
+  /// Denormalised sale price. A CHECK constraint keeps it consistent with
+  /// mrpPaise and discountPercent, so it can be indexed and sorted on safely.
+  pricePaise      Int
+  nutrition       Json?
+  tags            String[] @default([])
+  ratingAvg       Float    @default(0)
+  ratingCount     Int      @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  /// Generated tsvector (name A, brand B, description C). Never written by the
+  /// application; declared here only so Prisma does not drop the column.
+  searchVector Unsupported("tsvector")?
+
+  category      Category             @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  images        ProductImage[]
+  inventory     Inventory?
+  stockLedger   StockLedger[]
+  cartItems     CartItem[]
+  wishlistItems WishlistItem[]
+  orderItems    OrderItem[]
+  reviews       Review[]
+  demandStat    ProductDemandStat?
+  userStats     UserProductStat[]
+  associationsA ProductAssociation[] @relation("AssocA")
+  associationsB ProductAssociation[] @relation("AssocB")
+
+  @@index([categoryId, isActive])
+  @@index([isActive, pricePaise])
+  @@index([isActive, ratingAvg])
+}
+
+model ProductImage {
+  id           String  @id @default(uuid())
+  productId    String
+  url          String
+  publicId     String?
+  alt          String
+  displayOrder Int     @default(0)
+  isPrimary    Boolean @default(false)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, displayOrder])
+}
+
+model Inventory {
+  id                 String   @id @default(uuid())
+  productId          String   @unique
+  /// Physical stock on hand.
+  stock              Int      @default(0)
+  /// Claimed by orders that have not been paid for yet. Sellable = stock - reserved.
+  reserved           Int      @default(0)
+  lowStockThreshold  Int      @default(10)
+  updatedAt          DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model StockLedger {
+  id           String      @id @default(uuid())
+  productId    String
+  delta        Int
+  reason       StockReason
+  balanceAfter Int
+  orderId      String?
+  actorId      String?
+  note         String?
+  createdAt    DateTime    @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  actor   User?   @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([productId, createdAt])
+  @@index([orderId])
+}
+
+// ───────────────────────────── shopping ──────────────────────────────
+
+model Cart {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items CartItem[]
+}
+
+model CartItem {
+  id        String   @id @default(uuid())
+  cartId    String
+  productId String
+  quantity  Int
+  addedAt   DateTime @default(now())
+
+  cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, productId])
+}
+
+model Wishlist {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  createdAt DateTime @default(now())
+
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items WishlistItem[]
+}
+
+model WishlistItem {
+  id         String   @id @default(uuid())
+  wishlistId String
+  productId  String
+  addedAt    DateTime @default(now())
+
+  wishlist Wishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([wishlistId, productId])
+}
+
+// ──────────────────────── checkout primitives ────────────────────────
+
+model SlotTemplate {
+  id             String   @id @default(uuid())
+  /// Minutes from midnight, local time. 840 = 14:00.
+  startMinute    Int
+  endMinute      Int
+  capacity       Int      @default(30)
+  /// Orders close this many minutes before the slot starts.
+  cutoffMinutes  Int      @default(60)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  instances SlotInstance[]
+
+  @@unique([startMinute, endMinute])
+}
+
+model SlotInstance {
+  id         String   @id @default(uuid())
+  templateId String
+  date       DateTime @db.Date
+  capacity   Int
+  booked     Int      @default(0)
+  isActive   Boolean  @default(true)
+
+  template SlotTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  orders   Order[]
+
+  @@unique([templateId, date])
+  @@index([date, isActive])
+}
+
+model Coupon {
+  id                   String       @id @default(uuid())
+  code                 String       @unique
+  description          String
+  discountType         DiscountType
+  /// Percent (0-100) when PERCENT, paise when FIXED.
+  value                Int
+  minOrderPaise        Int          @default(0)
+  maxDiscountPaise     Int?
+  startsAt             DateTime
+  expiresAt            DateTime
+  usageLimit           Int?
+  perUserLimit         Int          @default(1)
+  usedCount            Int          @default(0)
+  applicableCategoryIds String[]    @default([])
+  applicableProductIds  String[]    @default([])
+  isActive             Boolean      @default(true)
+  createdAt            DateTime     @default(now())
+
+  usages CouponUsage[]
+  orders Order[]
+
+  @@index([isActive, expiresAt])
+}
+
+model CouponUsage {
+  id                  String   @id @default(uuid())
+  couponId            String
+  userId              String
+  orderId             String   @unique
+  discountAppliedPaise Int
+  createdAt           DateTime @default(now())
+
+  coupon Coupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order  Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([couponId, userId])
+}
+
+// ────────────────────────── order & payment ──────────────────────────
+
+model Order {
+  id               String      @id @default(uuid())
+  orderNumber      String      @unique
+  userId           String
+  status           OrderStatus @default(PENDING_PAYMENT)
+  /// Frozen copy of the delivery address at purchase time.
+  addressSnapshot  Json
+  slotInstanceId   String?
+  /// Frozen slot description, e.g. { date, startMinute, endMinute }.
+  slotSnapshot     Json?
+  couponId         String?
+  subtotalPaise    Int
+  discountPaise    Int         @default(0)
+  deliveryFeePaise Int         @default(0)
+  taxPaise         Int         @default(0)
+  totalPaise       Int
+  paymentMode      PaymentMethod
+  cancelReason     String?
+  placedAt         DateTime?
+  confirmedAt      DateTime?
+  deliveredAt      DateTime?
+  cancelledAt      DateTime?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
+  slotInstance SlotInstance?       @relation(fields: [slotInstanceId], references: [id], onDelete: SetNull)
+  coupon      Coupon?              @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  items       OrderItem[]
+  history     OrderStatusHistory[]
+  payments    Payment[]
+  assignment  DeliveryAssignment?
+  couponUsage CouponUsage?
+  reviews     Review[]
+  notifications Notification[]
+  stockLedger StockLedger[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([status, createdAt])
+  @@index([placedAt])
+}
+
+model OrderItem {
+  id              String @id @default(uuid())
+  orderId         String
+  productId       String
+  /// Snapshots — never updated when the product changes.
+  nameSnapshot    String
+  brandSnapshot   String?
+  unitSnapshot    String
+  imageSnapshot   String?
+  unitPricePaise  Int
+  discountPaise   Int    @default(0)
+  quantity        Int
+  lineTotalPaise  Int
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model OrderStatusHistory {
+  id         String       @id @default(uuid())
+  orderId    String
+  fromStatus OrderStatus?
+  toStatus   OrderStatus
+  actorId    String?
+  actorRole  Role?
+  note       String?
+  createdAt  DateTime     @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt])
+}
+
+model Payment {
+  id             String        @id @default(uuid())
+  orderId        String
+  gateway        String        @default("cashfree")
+  gatewayOrderId String        @unique
+  cfPaymentId    String?       @unique
+  method         PaymentMethod
+  status         PaymentStatus @default(CREATED)
+  amountPaise    Int
+  /// QR payload returned by the gateway (image data / intent links).
+  qrPayload      Json?
+  attemptNumber  Int           @default(1)
+  failureCode    String?
+  expiresAt      DateTime?
+  settledAt      DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  refunds Refund[]
+
+  @@index([orderId])
+  @@index([status, expiresAt])
+}
+
+model Refund {
+  id              String       @id @default(uuid())
+  paymentId       String
+  gatewayRefundId String       @unique
+  amountPaise     Int
+  status          RefundStatus @default(INITIATED)
+  reason          String
+  processedAt     DateTime?
+  createdAt       DateTime     @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+}
+
+model DeliveryAssignment {
+  id          String           @id @default(uuid())
+  orderId     String           @unique
+  partnerId   String
+  status      AssignmentStatus @default(OFFERED)
+  offeredAt   DateTime         @default(now())
+  acceptedAt  DateTime?
+  pickedUpAt  DateTime?
+  completedAt DateTime?
+
+  order   Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  partner DeliveryPartner @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+
+  @@index([partnerId, status])
+}
+
+model WebhookEvent {
+  id             String   @id @default(uuid())
+  gateway        String   @default("cashfree")
+  eventId        String   @unique
+  eventType      String
+  signatureValid Boolean
+  rawPayload     Json
+  processedAt    DateTime?
+  error          String?
+  createdAt      DateTime @default(now())
+
+  @@index([eventType, createdAt])
+}
+
+model IdempotencyKey {
+  id             String   @id @default(uuid())
+  key            String   @unique
+  userId         String
+  endpoint       String
+  requestHash    String
+  responseStatus Int?
+  responseBody   Json?
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+// ───────────────────────── engagement & stats ────────────────────────
+
+model Review {
+  id                 String       @id @default(uuid())
+  userId             String
+  productId          String
+  orderId            String
+  rating             Int
+  title              String?
+  body               String?
+  isVerifiedPurchase Boolean      @default(true)
+  status             ReviewStatus @default(APPROVED)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([productId, status, createdAt])
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  orderId   String?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order Order? @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt(sort: Desc)])
+}
+
+/// Directed co-occurrence edge, stored for both (A,B) and (B,A).
+/// Rebuilt nightly in phase 11 — never written by request handlers.
+model ProductAssociation {
+  id                String   @id @default(uuid())
+  productAId        String
+  productBId        String
+  coOccurrenceCount Int
+  support           Float
+  confidence        Float
+  lift              Float
+  computedAt        DateTime @default(now())
+
+  productA Product @relation("AssocA", fields: [productAId], references: [id], onDelete: Cascade)
+  productB Product @relation("AssocB", fields: [productBId], references: [id], onDelete: Cascade)
+
+  @@unique([productAId, productBId])
+  @@index([productAId, confidence(sort: Desc)])
+}
+
+/// Per-user replenishment profile powering Smart Basket.
+model UserProductStat {
+  id                 String    @id @default(uuid())
+  userId             String
+  productId          String
+  purchaseCount      Int       @default(0)
+  totalQuantity      Int       @default(0)
+  lastPurchasedAt    DateTime?
+  medianIntervalDays Float?
+  medianQuantity     Int       @default(1)
+  computedAt         DateTime  @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId, lastPurchasedAt])
+}
+
+/// Demand signal powering low-stock alerts and stockout prediction.
+model ProductDemandStat {
+  id              String   @id @default(uuid())
+  productId       String   @unique
+  salesLast7      Int      @default(0)
+  salesLast30     Int      @default(0)
+  avgDailySales   Float    @default(0)
+  ewmaDailySales  Float    @default(0)
+  daysRemaining   Float?
+  computedAt      DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([daysRemaining])
+}
