@@ -1,6 +1,6 @@
-import express, { type Express } from 'express';
+import express, { type Express, type RequestHandler } from 'express';
 import cors from 'cors';
-import helmet from 'helmet';
+import helmetModule from 'helmet';
 import cookieParser from 'cookie-parser';
 import { pinoHttp } from 'pino-http';
 import { env } from './config/env.js';
@@ -12,6 +12,14 @@ import { apiRouter } from './routes/index.js';
 import { webhook as paymentWebhook } from './controllers/payment.controller.js';
 
 export const API_PREFIX = '/api/v1';
+
+type HelmetFactory = (options?: {
+  crossOriginResourcePolicy?: {
+    policy?: string;
+  };
+}) => RequestHandler;
+
+const helmet = helmetModule as unknown as HelmetFactory;
 
 export function createApp(): Express {
   const app = express();
