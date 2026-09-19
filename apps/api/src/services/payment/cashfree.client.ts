@@ -12,7 +12,7 @@ const API_VERSION = env.CASHFREE_API_VERSION || '2025-01-01';
 
 export const isCashfreeConfigured = Boolean(
   env.CASHFREE_APP_ID &&
-  env.CASHFREE_SECRET_KEY,
+    env.CASHFREE_SECRET_KEY,
 );
 
 if (!isCashfreeConfigured) {
@@ -29,6 +29,12 @@ function requireCashfree(): void {
     );
   }
 }
+
+type CashfreeResponse = {
+  json: () => Promise<unknown>;
+  ok: boolean;
+  status: number;
+};
 
 async function cfFetch<T>(
   path: string,
@@ -58,10 +64,10 @@ async function cfFetch<T>(
     Object.assign(headers, init.headers);
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = (await globalThis.fetch(`${BASE_URL}${path}`, {
     ...init,
     headers,
-  });
+  })) as unknown as CashfreeResponse;
 
   const body = (await res.json().catch(() => ({}))) as T & {
     message?: string;
