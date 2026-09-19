@@ -1,6 +1,12 @@
-import rateLimit from 'express-rate-limit';
+import rateLimitModule from 'express-rate-limit';
+import type { RequestHandler } from 'express';
 import { ErrorCode } from '@grovia/shared';
 import { isTest } from '../config/env.js';
+
+type RateLimitFactory = (options: object) => RequestHandler;
+
+const rateLimit =
+  rateLimitModule as unknown as RateLimitFactory;
 
 /**
  * In-memory store: correct for a single API instance. Running more than one
