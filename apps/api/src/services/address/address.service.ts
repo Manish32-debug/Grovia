@@ -47,12 +47,21 @@ export async function listAddresses(userId: string): Promise<AddressDTO[]> {
  * Deliberately returns NOT_FOUND for another user's address as well, avoiding
  * an existence oracle for address IDs.
  */
-export async function getAddressOrThrow(userId: string, addressId: string) {
+export async function getAddressOrThrow(
+  userId: string,
+  addressId: string,
+) {
   const address = await prisma.address.findFirst({
-    where: { id: addressId, userId, deletedAt: null },
+    where: {
+      id: addressId,
+      userId,
+      deletedAt: null,
+    },
   });
 
-  if (!address) throw AppError.notFound('Address not found.');
+  if (!address) {
+    throw AppError.notFound('Address not found.');
+  }
 
   return address;
 }
@@ -73,19 +82,30 @@ export async function createAddress(
           isDefault: true,
           deletedAt: null,
         },
-        data: { isDefault: false },
+        data: {
+          isDefault: false,
+        },
       });
     }
 
     const existingCount = await tx.address.count({
-      where: { userId, deletedAt: null },
+      where: {
+        userId,
+        deletedAt: null,
+      },
     });
+
+    const { isDefault, ...addressFields } = input;
 
     return tx.address.create({
       data: {
-        ...input,
-        userId,
-        isDefault: input.isDefault || existingCount === 0,
+        ...addressFields,
+        isDefault: isDefault || existingCount === 0,
+        user: {
+          connect: {
+            id: userId,
+          },
+        },
       },
     });
   });
@@ -108,9 +128,13 @@ export async function updateAddress(
           userId,
           isDefault: true,
           deletedAt: null,
-          NOT: { id: addressId },
+          NOT: {
+            id: addressId,
+          },
         },
-        data: { isDefault: false },
+        data: {
+          isDefault: false,
+        },
       });
     } else if (existing.isDefault) {
       /*
@@ -118,11 +142,16 @@ export async function updateAddress(
        * To change the default, the caller should mark another address as
        * default; that transaction clears this one atomically.
        */
-      input = { ...input, isDefault: true };
+      input = {
+        ...input,
+        isDefault: true,
+      };
     }
 
     return tx.address.update({
-      where: { id: addressId },
+      where: {
+        id: addressId,
+      },
       data: input,
     });
   });
@@ -138,8 +167,13 @@ export async function deleteAddress(
 
   await prisma.$transaction(async (tx) => {
     await tx.address.update({
-      where: { id: addressId },
-      data: { deletedAt: new Date(), isDefault: false },
+      where: {
+        id: addressId,
+      },
+      data: {
+        deletedAt: new Date(),
+        isDefault: false,
+      },
     });
 
     /*
@@ -152,13 +186,19 @@ export async function deleteAddress(
           userId,
           deletedAt: null,
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: {
+          createdAt: 'desc',
+        },
       });
 
       if (next) {
         await tx.address.update({
-          where: { id: next.id },
-          data: { isDefault: true },
+          where: {
+            id: next.id,
+          },
+          data: {
+            isDefault: true,
+          },
         });
       }
     }
