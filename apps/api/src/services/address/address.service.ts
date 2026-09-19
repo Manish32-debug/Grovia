@@ -1,4 +1,5 @@
 import type { AddressDTO, AddressWriteInput } from '@grovia/shared';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../../config/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 
@@ -94,10 +95,6 @@ export async function createAddress(
   input: AddressWriteInput,
 ): Promise<AddressDTO> {
   const address = await prisma.$transaction(async (tx) => {
-    /*
-     * If this is explicitly the default address, clear the existing default
-     * first. The first active address is also promoted to default.
-     */
     if (input.isDefault) {
       await tx.address.updateMany({
         where: {
@@ -118,18 +115,32 @@ export async function createAddress(
       },
     });
 
-    const { isDefault, ...addressFields } = input;
-
-    return tx.address.create({
-      data: {
-        ...addressFields,
-        isDefault: isDefault || existingCount === 0,
-        user: {
-          connect: {
-            id: userId,
-          },
+    /*
+     * AddressWriteInput is intentionally looser than Prisma's create type.
+     * The API validation layer guarantees these address fields are present.
+     * Map them explicitly so Prisma does not infer the wrong create-input
+     * union.
+     */
+    const createData: Prisma.AddressCreateInput = {
+      label: input.label!,
+      contactName: input.contactName!,
+      contactPhone: input.contactPhone!,
+      line1: input.line1!,
+      line2: input.line2 ?? null,
+      landmark: input.landmark ?? null,
+      city: input.city!,
+      state: input.state!,
+      pincode: input.pincode!,
+      isDefault: input.isDefault || existingCount === 0,
+      user: {
+        connect: {
+          id: userId,
         },
       },
+    };
+
+    return tx.address.create({
+      data: createData,
       select: ADDRESS_SELECT,
     });
   });
@@ -148,10 +159,20 @@ export async function updateAddress(
   );
 
   const address = await prisma.$transaction(async (tx) => {
-    let updateInput = input;
+    let updateInput: Prisma.AddressUpdateInput = {
+      label: input.label,
+      contactName: input.contactName,
+      contactPhone: input.contactPhone,
+      line1: input.line1,
+      line2: input.line2,
+      landmark: input.landmark,
+      city: input.city,
+      state: input.state,
+      pincode: input.pincode,
+      isDefault: input.isDefault,
+    };
 
     if (input.isDefault) {
-      // There must be at most one active default for this user.
       await tx.address.updateMany({
         where: {
           userId,
@@ -167,10 +188,11 @@ export async function updateAddress(
       });
     } else if (existing.isDefault) {
       /*
-       * Never allow an update to leave the user with zero default addresses.
+       * Never allow an update to leave the user with zero default
+       * addresses.
        */
       updateInput = {
-        ...input,
+        ...updateInput,
         isDefault: true,
       };
     }
