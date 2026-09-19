@@ -30,15 +30,20 @@ function requireCashfree(): void {
   }
 }
 
+type CashfreeFetchInit = {
+  method: 'GET' | 'POST';
+  body?: string;
+};
+
 type CashfreeResponse = {
-  json: () => Promise<unknown>;
+  json(): Promise<unknown>;
   ok: boolean;
   status: number;
 };
 
 async function cfFetch<T>(
   path: string,
-  init: RequestInit,
+  init: CashfreeFetchInit,
   options: {
     idempotencyKey?: string;
   } = {},
@@ -60,12 +65,9 @@ async function cfFetch<T>(
     headers['x-idempotency-key'] = options.idempotencyKey;
   }
 
-  if (init.headers) {
-    Object.assign(headers, init.headers);
-  }
-
   const res = (await globalThis.fetch(`${BASE_URL}${path}`, {
-    ...init,
+    method: init.method,
+    body: init.body,
     headers,
   })) as unknown as CashfreeResponse;
 
