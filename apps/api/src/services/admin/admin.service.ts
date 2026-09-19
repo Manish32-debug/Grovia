@@ -289,8 +289,16 @@ export async function listCategories() {
 }
 
 export async function createCategory(input: CategoryWriteInput) {
+  const data: Prisma.CategoryCreateInput = {
+    name: input.name!,
+    slug: input.slug!,
+    iconUrl: input.iconUrl ?? null,
+    displayOrder: input.displayOrder ?? 0,
+    isActive: input.isActive ?? true,
+  };
+
   return prisma.category.create({
-    data: input,
+    data,
   });
 }
 
@@ -298,9 +306,17 @@ export async function updateCategory(
   categoryId: string,
   input: CategoryWriteInput,
 ) {
+  const data: Prisma.CategoryUpdateInput = {
+    name: input.name,
+    slug: input.slug,
+    iconUrl: input.iconUrl,
+    displayOrder: input.displayOrder,
+    isActive: input.isActive,
+  };
+
   return prisma.category.update({
     where: { id: categoryId },
-    data: input,
+    data,
   });
 }
 
