@@ -2,6 +2,20 @@ import type { AddressDTO, AddressWriteInput } from '@grovia/shared';
 import { prisma } from '../../config/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 
+const ADDRESS_SELECT = {
+  id: true,
+  label: true,
+  contactName: true,
+  contactPhone: true,
+  line1: true,
+  line2: true,
+  landmark: true,
+  city: true,
+  state: true,
+  pincode: true,
+  isDefault: true,
+} as const;
+
 type AddressRecord = {
   id: string;
   label: string;
@@ -32,10 +46,19 @@ function toDTO(a: AddressRecord): AddressDTO {
   };
 }
 
-export async function listAddresses(userId: string): Promise<AddressDTO[]> {
+export async function listAddresses(
+  userId: string,
+): Promise<AddressDTO[]> {
   const rows = await prisma.address.findMany({
-    where: { userId, deletedAt: null },
-    orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
+    where: {
+      userId,
+      deletedAt: null,
+    },
+    select: ADDRESS_SELECT,
+    orderBy: [
+      { isDefault: 'desc' },
+      { createdAt: 'desc' },
+    ],
   });
 
   return rows.map(toDTO);
@@ -107,6 +130,7 @@ export async function createAddress(
           },
         },
       },
+      select: ADDRESS_SELECT,
     });
   });
 
@@ -118,9 +142,14 @@ export async function updateAddress(
   addressId: string,
   input: AddressWriteInput,
 ): Promise<AddressDTO> {
-  const existing = await getAddressOrThrow(userId, addressId);
+  const existing = await getAddressOrThrow(
+    userId,
+    addressId,
+  );
 
   const address = await prisma.$transaction(async (tx) => {
+    let updateInput = input;
+
     if (input.isDefault) {
       // There must be at most one active default for this user.
       await tx.address.updateMany({
@@ -139,10 +168,8 @@ export async function updateAddress(
     } else if (existing.isDefault) {
       /*
        * Never allow an update to leave the user with zero default addresses.
-       * To change the default, the caller should mark another address as
-       * default; that transaction clears this one atomically.
        */
-      input = {
+      updateInput = {
         ...input,
         isDefault: true,
       };
@@ -152,7 +179,8 @@ export async function updateAddress(
       where: {
         id: addressId,
       },
-      data: input,
+      data: updateInput,
+      select: ADDRESS_SELECT,
     });
   });
 
@@ -163,7 +191,10 @@ export async function deleteAddress(
   userId: string,
   addressId: string,
 ): Promise<void> {
-  const address = await getAddressOrThrow(userId, addressId);
+  const address = await getAddressOrThrow(
+    userId,
+    addressId,
+  );
 
   await prisma.$transaction(async (tx) => {
     await tx.address.update({
