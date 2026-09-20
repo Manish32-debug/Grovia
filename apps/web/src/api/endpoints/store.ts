@@ -171,7 +171,10 @@ export const cancelOrder = (id: string, reason: string) =>
   });
 
 export const reorder = (id: string) =>
-  post<Cart>(`/orders/${id}/reorder`);
+  post<{
+    addedCount: number;
+    skipped: string[];
+  }>(`/orders/${id}/reorder`);
 
 export const paymentStatus = (
   orderId: string,
