@@ -21,29 +21,143 @@ import { ResetPasswordPage } from '@/pages/auth/ResetPassword';
 import { VerifyEmailPage } from '@/pages/auth/VerifyEmail';
 import { AccountPage } from '@/pages/Account';
 import { AdminDashboardPage } from '@/pages/admin/AdminDashboard';
+import { AdminProductsPage } from '@/pages/admin/AdminProducts';
 import { DeliveryDashboardPage } from '@/pages/delivery/DeliveryDashboard';
 import { Role } from '@grovia/shared';
 import { useAuth } from '@/hooks/useAuth';
 import type { ReactNode } from 'react';
 
 export const router = createBrowserRouter([
-  { element:<AuthLayout />, children:[
-    {path:'/login',element:<LoginPage/>},{path:'/register',element:<RegisterPage/>},{path:'/forgot-password',element:<ForgotPasswordPage/>},{path:'/reset-password',element:<ResetPasswordPage/>},{path:'/verify-email',element:<VerifyEmailPage/>},
-  ]},
-  { element:<CustomerLayout />, children:[
-    {path:'/',element:<HomePage/>},{path:'/search',element:<ShopPage/>},{path:'/products/:slug',element:<ProductPage/>},
-    {element:<RequireAuth/>,children:[
-      {path:'/cart',element:<CartPage/>},{path:'/wishlist',element:<WishlistPage/>},{path:'/checkout',element:<CheckoutPage/>},{path:'/orders',element:<OrdersPage/>},{path:'/orders/:orderId',element:<OrderPage/>},{path:'/notifications',element:<NotificationsPage/>},{path:'/smart-basket',element:<SmartBasketPage/>},{path:'/reviews/:productId',element:<ReviewsPage/>},{path:'/account',element:<AccountPage/>},
-      {path:'/admin',element:<RequireRole roles={[Role.ADMIN]}><AdminDashboardPage/></RequireRole>},
-      {path:'/delivery',element:<RequireRole roles={[Role.DELIVERY_PARTNER]}><DeliveryDashboardPage/></RequireRole>},
-    ]},{path:'*',element:<NotFoundPage/>},
-  ]},
+  {
+    element: <AuthLayout />,
+    children: [
+      {
+        path: '/login',
+        element: <LoginPage />,
+      },
+      {
+        path: '/register',
+        element: <RegisterPage />,
+      },
+      {
+        path: '/forgot-password',
+        element: <ForgotPasswordPage />,
+      },
+      {
+        path: '/reset-password',
+        element: <ResetPasswordPage />,
+      },
+      {
+        path: '/verify-email',
+        element: <VerifyEmailPage />,
+      },
+    ],
+  },
+  {
+    element: <CustomerLayout />,
+    children: [
+      {
+        path: '/',
+        element: <HomePage />,
+      },
+      {
+        path: '/search',
+        element: <ShopPage />,
+      },
+      {
+        path: '/products/:slug',
+        element: <ProductPage />,
+      },
+      {
+        element: <RequireAuth />,
+        children: [
+          {
+            path: '/cart',
+            element: <CartPage />,
+          },
+          {
+            path: '/wishlist',
+            element: <WishlistPage />,
+          },
+          {
+            path: '/checkout',
+            element: <CheckoutPage />,
+          },
+          {
+            path: '/orders',
+            element: <OrdersPage />,
+          },
+          {
+            path: '/orders/:orderId',
+            element: <OrderPage />,
+          },
+          {
+            path: '/notifications',
+            element: <NotificationsPage />,
+          },
+          {
+            path: '/smart-basket',
+            element: <SmartBasketPage />,
+          },
+          {
+            path: '/reviews/:productId',
+            element: <ReviewsPage />,
+          },
+          {
+            path: '/account',
+            element: <AccountPage />,
+          },
+          {
+            path: '/admin',
+            element: (
+              <RequireRole roles={[Role.ADMIN]}>
+                <AdminDashboardPage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: '/admin/products',
+            element: (
+              <RequireRole roles={[Role.ADMIN]}>
+                <AdminProductsPage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: '/delivery',
+            element: (
+              <RequireRole roles={[Role.DELIVERY_PARTNER]}>
+                <DeliveryDashboardPage />
+              </RequireRole>
+            ),
+          },
+        ],
+      },
+      {
+        path: '*',
+        element: <NotFoundPage />,
+      },
+    ],
+  },
 ]);
 
-function RequireRole({roles,children}:{roles:Role[];children:ReactNode}){
+function RequireRole({
+  roles,
+  children,
+}: {
+  roles: Role[];
+  children: ReactNode;
+}) {
   // Role is already present in the authenticated session. This UI gate is only
   // for navigation; the API remains the security boundary.
-  const {user}=useAuth();
-  if(!user || !roles.includes(user.role as Role)) return <NotFoundPage/>;
+  const { user } = useAuth();
+
+  if (
+    !user ||
+    !roles.includes(user.role as Role)
+  ) {
+    return <NotFoundPage />;
+  }
+
   return <>{children}</>;
 }
