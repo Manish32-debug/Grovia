@@ -17,6 +17,7 @@ import { categories } from './data/categories.js';
 import { products, type SeedProduct } from './data/products.js';
 import { coupons } from './data/coupons.js';
 import { dateOnly, daysAgo, mulberry32, pick, randInt } from './helpers.js';
+import { recordDeliveredPurchase } from '../../src/services/intelligence/intelligence.service.js';
 
 const prisma = new PrismaClient();
 const rng = mulberry32(20260912);
@@ -793,6 +794,18 @@ async function seedOrderHistory() {
           ),
         },
       );
+
+      await prisma.$transaction(async (tx) => {
+        await recordDeliveredPurchase(
+          tx,
+          customer.id,
+          items.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+          })),
+          deliveredAt,
+        );
+      });
 
       await prisma.payment.create({
         data: {
