@@ -1,16 +1,45 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
+  Apple,
   ArrowRight,
+  CakeSlice,
+  Cookie,
+  CupSoda,
+  House,
   Leaf,
+  Milk,
+  Package,
   ShieldCheck,
+  Snowflake,
+  Soup,
+  Sparkles,
   Truck,
+  Wheat,
+  type LucideIcon,
 } from 'lucide-react';
 import {
   listCategories,
   listProducts,
 } from '@/api/endpoints/store';
 import { formatMoney } from '@/lib/format';
+
+const categoryIcons: Record<string, LucideIcon> = {
+  'fruits-vegetables': Apple,
+  dairy: Milk,
+  bakery: CakeSlice,
+  beverages: CupSoda,
+  snacks: Cookie,
+  staples: Wheat,
+  'rice-grains': Soup,
+  'personal-care': Sparkles,
+  household: House,
+  'frozen-foods': Snowflake,
+};
+
+function getCategoryIcon(slug: string): LucideIcon {
+  return categoryIcons[slug] ?? Package;
+}
 
 export function HomePage() {
   const c = useQuery({
@@ -145,32 +174,29 @@ export function HomePage() {
           </Link>
         </div>
 
-        <div className="mt-5 flex gap-5 overflow-x-auto pb-3">
-          {c.data?.map((x) => (
-            <Link
-              key={x.id}
-              to={`/search?category=${x.slug}`}
-              className="group min-w-[92px] text-center sm:min-w-[110px]"
-            >
-              <div className="mx-auto grid size-[78px] overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-[#e8ebe3] transition-transform group-hover:scale-105 sm:size-[90px]">
-                {x.iconUrl ? (
-                  <img
-                    src={x.iconUrl}
-                    alt={x.name}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="grid h-full w-full place-items-center bg-grove-50 text-3xl">
-                    🥬
-                  </div>
-                )}
-              </div>
+        <div className="mt-5 flex gap-5 overflow-x-auto pb-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+          {c.data?.map((x) => {
+            const Icon = getCategoryIcon(x.slug);
 
-              <p className="mt-3 text-xs font-bold leading-4 text-text-2 sm:text-sm">
-                {x.name}
-              </p>
-            </Link>
-          ))}
+            return (
+              <Link
+                key={x.id}
+                to={`/search?category=${x.slug}`}
+                className="group min-w-[92px] shrink-0 text-center sm:min-w-[110px]"
+              >
+                <div className="mx-auto grid size-[78px] place-items-center rounded-full bg-[#eaf7ef] text-grove-600 shadow-sm ring-1 ring-[#dceee2] transition-all group-hover:scale-105 group-hover:bg-grove-100 sm:size-[90px]">
+                  <Icon
+                    size={34}
+                    strokeWidth={1.8}
+                  />
+                </div>
+
+                <p className="mt-3 text-xs font-bold leading-4 text-text-2 sm:text-sm">
+                  {x.name}
+                </p>
+              </Link>
+            );
+          })}
         </div>
       </section>
 
