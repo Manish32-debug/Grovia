@@ -86,7 +86,9 @@ export type Order = {
   canReview: boolean;
 };
 
-export const listProducts = (params: Record<string, unknown>) =>
+export const listProducts = (
+  params: Record<string, unknown>,
+) =>
   get<{
     items: Product[];
     page: number;
@@ -111,13 +113,19 @@ export const productBySlug = (slug: string) =>
 
 export const cart = () => get<Cart>('/cart');
 
-export const addCart = (productId: string, quantity: number) =>
+export const addCart = (
+  productId: string,
+  quantity: number,
+) =>
   post<Cart>('/cart/items', {
     productId,
     quantity,
   });
 
-export const updateCart = (productId: string, quantity: number) =>
+export const updateCart = (
+  productId: string,
+  quantity: number,
+) =>
   patch<Cart>(`/cart/items/${productId}`, {
     quantity,
   });
@@ -139,7 +147,8 @@ export type WishlistItem = {
   addedAt: string;
 };
 
-export const wishlist = () => get<WishlistItem[]>('/wishlist');
+export const wishlist = () =>
+  get<WishlistItem[]>('/wishlist');
 
 export const addWishlist = (productId: string) =>
   post(`/wishlist/${productId}`);
@@ -147,15 +156,21 @@ export const addWishlist = (productId: string) =>
 export const removeWishlist = (productId: string) =>
   del(`/wishlist/${productId}`);
 
-export const addresses = () => get<any[]>('/addresses');
+export const addresses = () =>
+  get<any[]>('/addresses');
 
 export const slots = (date?: string) =>
-  get<any[]>('/slots', date ? { date } : undefined);
+  get<any[]>(
+    '/slots',
+    date ? { date } : undefined,
+  );
 
 export const checkout = (body: unknown) =>
   post<any>('/orders/checkout', body);
 
-export const orders = (params?: Record<string, unknown>) =>
+export const orders = (
+  params?: Record<string, unknown>,
+) =>
   get<{
     items: Order[];
     total: number;
@@ -165,7 +180,10 @@ export const orders = (params?: Record<string, unknown>) =>
 export const order = (id: string) =>
   get<Order>(`/orders/${id}`);
 
-export const cancelOrder = (id: string, reason: string) =>
+export const cancelOrder = (
+  id: string,
+  reason: string,
+) =>
   post(`/orders/${id}/cancel`, {
     reason,
   });
@@ -185,7 +203,9 @@ export const paymentStatus = (
     paymentStatus: string | null;
   }>(
     `/orders/${orderId}/payment-status`,
-    paymentId ? { paymentId } : undefined,
+    paymentId
+      ? { paymentId }
+      : undefined,
   );
 
 export type NotificationItem = {
@@ -215,10 +235,14 @@ export const markAllNotificationsRead = () =>
 export const smartBasket = () =>
   get<any[]>('/intelligence/smart-basket');
 
-export const recommendations = (productId?: string) =>
+export const recommendations = (
+  productId?: string,
+) =>
   get<any[]>(
     '/intelligence/recommendations',
-    productId ? { productId } : undefined,
+    productId
+      ? { productId }
+      : undefined,
   );
 
 export const reviews = (productId: string) =>
@@ -244,15 +268,57 @@ export const adminOrders = (
 ) =>
   get<any>('/admin/orders', params);
 
+export const adminCategories = () =>
+  get<any[]>('/admin/categories');
+
+export const createAdminCategory = (
+  body: unknown,
+) =>
+  post('/admin/categories', body);
+
+export const updateAdminCategory = (
+  categoryId: string,
+  body: unknown,
+) =>
+  patch(
+    `/admin/categories/${categoryId}`,
+    body,
+  );
+
+export const adminDeliveryPartners = () =>
+  get<any[]>('/admin/delivery-partners');
+
+export const assignAdminDelivery = (
+  orderId: string,
+  partnerId: string,
+) =>
+  post('/admin/delivery-assignments', {
+    orderId,
+    partnerId,
+  });
+
+export const transitionOrder = (
+  orderId: string,
+  toStatus: string,
+  note?: string,
+) =>
+  patch(`/orders/${orderId}/status`, {
+    toStatus,
+    note,
+  });
+
 export const adjustInventory = (
   productId: string,
   delta: number,
   note?: string,
 ) =>
-  post(`/admin/products/${productId}/inventory`, {
-    delta,
-    note,
-  });
+  post(
+    `/admin/products/${productId}/inventory`,
+    {
+      delta,
+      note,
+    },
+  );
 
 export const deliveryAssignments = () =>
   get<any[]>('/delivery');
@@ -273,3 +339,16 @@ export const failAssignment = (
   post(`/delivery/${id}/fail`, {
     note,
   });
+
+export const adminDemand = () =>
+  get<any[]>('/intelligence/demand');
+
+export const rebuildAdminDemand = () =>
+  post<{ updated: number }>(
+    '/intelligence/demand/rebuild',
+  );
+
+export const rebuildAdminAssociations = () =>
+  post<{ updated: number }>(
+    '/intelligence/associations/rebuild',
+  );

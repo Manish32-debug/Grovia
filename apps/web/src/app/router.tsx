@@ -1,5 +1,6 @@
 import { createBrowserRouter } from 'react-router-dom';
 import { CustomerLayout } from '@/layouts/CustomerLayout';
+import { AdminLayout } from '@/layouts/AdminLayout';
 import { AuthLayout } from '@/layouts/AuthLayout';
 import { RequireAuth } from '@/components/auth/RequireAuth';
 import { HomePage } from '@/pages/Home';
@@ -20,9 +21,17 @@ import { ForgotPasswordPage } from '@/pages/auth/ForgotPassword';
 import { ResetPasswordPage } from '@/pages/auth/ResetPassword';
 import { VerifyEmailPage } from '@/pages/auth/VerifyEmail';
 import { AccountPage } from '@/pages/Account';
+
 import { AdminDashboardPage } from '@/pages/admin/AdminDashboard';
 import { AdminProductsPage } from '@/pages/admin/AdminProducts';
+import { AdminOrdersPage } from '@/pages/admin/AdminOrders';
+import { AdminInventoryPage } from '@/pages/admin/AdminInventory';
+import { AdminCategoriesPage } from '@/pages/admin/AdminCategories';
+import { AdminDeliveryPage } from '@/pages/admin/AdminDelivery';
+import { AdminIntelligencePage } from '@/pages/admin/AdminIntelligence';
+
 import { DeliveryDashboardPage } from '@/pages/delivery/DeliveryDashboard';
+
 import { Role } from '@grovia/shared';
 import { useAuth } from '@/hooks/useAuth';
 import type { ReactNode } from 'react';
@@ -53,6 +62,7 @@ export const router = createBrowserRouter([
       },
     ],
   },
+
   {
     element: <CustomerLayout />,
     children: [
@@ -68,6 +78,7 @@ export const router = createBrowserRouter([
         path: '/products/:slug',
         element: <ProductPage />,
       },
+
       {
         element: <RequireAuth />,
         children: [
@@ -108,9 +119,37 @@ export const router = createBrowserRouter([
             element: <AccountPage />,
           },
           {
+            path: '/delivery',
+            element: (
+              <RequireRole
+                roles={[Role.DELIVERY_PARTNER]}
+              >
+                <DeliveryDashboardPage />
+              </RequireRole>
+            ),
+          },
+        ],
+      },
+
+      {
+        path: '*',
+        element: <NotFoundPage />,
+      },
+    ],
+  },
+
+  {
+    element: <AdminLayout />,
+    children: [
+      {
+        element: <RequireAuth />,
+        children: [
+          {
             path: '/admin',
             element: (
-              <RequireRole roles={[Role.ADMIN]}>
+              <RequireRole
+                roles={[Role.ADMIN]}
+              >
                 <AdminDashboardPage />
               </RequireRole>
             ),
@@ -118,24 +157,64 @@ export const router = createBrowserRouter([
           {
             path: '/admin/products',
             element: (
-              <RequireRole roles={[Role.ADMIN]}>
+              <RequireRole
+                roles={[Role.ADMIN]}
+              >
                 <AdminProductsPage />
               </RequireRole>
             ),
           },
           {
-            path: '/delivery',
+            path: '/admin/orders',
             element: (
-              <RequireRole roles={[Role.DELIVERY_PARTNER]}>
-                <DeliveryDashboardPage />
+              <RequireRole
+                roles={[Role.ADMIN]}
+              >
+                <AdminOrdersPage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: '/admin/inventory',
+            element: (
+              <RequireRole
+                roles={[Role.ADMIN]}
+              >
+                <AdminInventoryPage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: '/admin/categories',
+            element: (
+              <RequireRole
+                roles={[Role.ADMIN]}
+              >
+                <AdminCategoriesPage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: '/admin/delivery',
+            element: (
+              <RequireRole
+                roles={[Role.ADMIN]}
+              >
+                <AdminDeliveryPage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: '/admin/intelligence',
+            element: (
+              <RequireRole
+                roles={[Role.ADMIN]}
+              >
+                <AdminIntelligencePage />
               </RequireRole>
             ),
           },
         ],
-      },
-      {
-        path: '*',
-        element: <NotFoundPage />,
       },
     ],
   },
@@ -148,8 +227,9 @@ function RequireRole({
   roles: Role[];
   children: ReactNode;
 }) {
-  // Role is already present in the authenticated session. This UI gate is only
-  // for navigation; the API remains the security boundary.
+  // Role is already present in the authenticated session.
+  // This UI gate is only for navigation; the API remains
+  // the actual security boundary.
   const { user } = useAuth();
 
   if (
